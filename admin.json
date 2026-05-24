@@ -1,0 +1,10 @@
+{
+  "_comment": "Demo admin bypass credentials. Logging in via AuthDialog with this id/password bypasses all paywalls and unlocks every feature.",
+  "users": [
+    {
+      "id": "admindemo",
+      "password": "admindemo",
+      "label": "Admin Demo (full access)"
+    }
+  ]
+}
