@@ -52,11 +52,35 @@ export const PATTERN_PRESETS: PatternPreset[] = [
     svg: (c, bg) => wrap(60, `<polyline points="0,30 30,10 60,30" fill="none" stroke="${c}" stroke-width="6"/><polyline points="0,55 30,35 60,55" fill="none" stroke="${c}" stroke-width="6"/>`, bg),
   },
   // ----- Embroidery-style presets (stitched look) -----
-  {
-    id: "embroidery-vine",
-    label: "Embroidery Vine",
-    svg: (c, bg) => wrap(100, `<defs><filter id="s"><feGaussianBlur stdDeviation="0.6"/></defs><path d="M10 80 Q30 40 50 60 T90 30" fill="none" stroke="${c}" stroke-width="3" stroke-dasharray="4 3" stroke-linecap="round"/><circle cx="30" cy="55" r="4" fill="${c}"/><circle cx="55" cy="55" r="3" fill="${c}" opacity="0.8"/><circle cx="78" cy="40" r="4" fill="${c}"/>`, bg),
-  },
+{
+  id: "embroidery-vine",
+  label: "Embroidery Vine",
+  svg: (c, bg) =>
+    wrap(
+      100,
+      `
+      <defs>
+        <filter id="s">
+          <feGaussianBlur stdDeviation="0.6"/>
+        </filter>
+      </defs>
+
+      <path
+        d="M10 80 Q30 40 50 60 T90 30"
+        fill="none"
+        stroke="${c}"
+        stroke-width="3"
+        stroke-dasharray="4 3"
+        stroke-linecap="round"
+      />
+
+      <circle cx="30" cy="55" r="4" fill="${c}" />
+      <circle cx="55" cy="55" r="3" fill="${c}" opacity="0.8" />
+      <circle cx="78" cy="40" r="4" fill="${c}" />
+      `,
+      bg
+    ),
+},
   {
     id: "embroidery-cross",
     label: "Cross Stitch",

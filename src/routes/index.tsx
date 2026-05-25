@@ -8,7 +8,7 @@ import { SubscriptionRequiredDialog } from "@/components/fabrixa/SubscriptionReq
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Fabrixa — 2D Textile & 3D Garment Design Studio" },
+      { title: "Fabrixa — A Complete Textile Studio" },
       { name: "description", content: "Design fabrics in 2D, preview garments in 3D. Patterns, textures, repeats, HD exports — built for non-technical designers." },
       { property: "og:title", content: "Fabrixa — Textile & Garment Design Studio" },
       { property: "og:description", content: "2D textile designer with live 3D garment preview." },

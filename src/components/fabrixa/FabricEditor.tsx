@@ -12,18 +12,41 @@ import { toast } from "sonner";
 import {
   MousePointer2, Square, Circle as CircleIcon, Type, Image as ImageIcon,
   Brush, Eraser, Trash2, Undo2, Redo2, Copy, Sparkles, Stamp, Replace,
-  Lasso, Pentagon, FlipHorizontal2, Wand2, CheckCircle2, Palette, ArrowUp,
+  Lasso, Pentagon, FlipHorizontal2, Wand2, Palette, ArrowUp, Crop,
+  MoreHorizontal
 } from "lucide-react";
 import { PATTERN_PRESETS, GRADIENT_PRESETS, patternToDataUrl } from "@/lib/fabrixa/presets";
 import {
-  SelectionMask, defaultMaskOptions, type SelectionMode, type SelectionTool,
+  SelectionMask, type SelectionMode,
 } from "@/lib/fabrixa/selectionMask";
 import { APP_DATA_0 } from "@/lib/fabrixa/APP_DATA_0";
 
+// --- NEW ISOLATED VECTOR PATTERNS (SAFE) ---
+const EXTRA_PATTERNS = [
+  { id: "ext_check", label: "Checkerboard", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><rect width="10" height="10" fill="{{color}}"/><rect x="10" y="10" width="10" height="10" fill="{{color}}"/></svg>` },
+  { id: "ext_grid", label: "Clean Grid", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M 20 0 L 0 0 0 20" fill="none" stroke="{{color}}" stroke-width="1"/></svg>` },
+  { id: "ext_dots", label: "Polka Dots", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><circle cx="5" cy="5" r="2.5" fill="{{color}}"/><circle cx="15" cy="15" r="2.5" fill="{{color}}"/></svg>` },
+  { id: "ext_diag", label: "Diagonal Lines", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="{{bg}}"/><path d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2" stroke="{{color}}" stroke-width="1.5"/></svg>` },
+  { id: "ext_tri", label: "Triangles", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><polygon points="10,0 20,20 0,20" fill="{{color}}"/></svg>` },
+  { id: "ext_zig", label: "ZigZag", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,10 l5,-5 l10,10 l5,-5" fill="none" stroke="{{color}}" stroke-width="1.5"/></svg>` },
+  { id: "ext_plus", label: "Plus Grid", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M10,0 v20 M0,10 h20" fill="none" stroke="{{color}}" stroke-width="1.5"/></svg>` },
+  { id: "ext_waves", label: "Ocean Waves", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,10 Q5,0 10,10 T20,10" fill="none" stroke="{{color}}" stroke-width="1.5"/></svg>` },
+  { id: "ext_cross", label: "Crosshatch", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,0 l20,20 M20,0 l-20,20" stroke="{{color}}" stroke-width="1"/></svg>` },
+  { id: "ext_diamond", label: "Diamonds", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><polygon points="10,0 20,10 10,20 0,10" fill="{{color}}"/></svg>` },
+  { id: "ext_hound", label: "Houndstooth", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,0 h10 v10 h-10 z M10,10 h10 v10 h-10 z M0,10 l5,-5 l5,5 z M10,20 l5,-5 l5,5 z" fill="{{color}}"/></svg>` },
+  { id: "ext_half", label: "Half Circles", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,10 a10,10 0 0,0 20,0" fill="{{color}}"/></svg>` },
+  { id: "ext_scales", label: "Scales", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,10 a10,10 0 0,0 20,0 M-10,20 a10,10 0 0,0 20,0 M10,20 a10,10 0 0,0 20,0" fill="none" stroke="{{color}}" stroke-width="1"/></svg>` },
+  { id: "ext_brick", label: "Brick Wall", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="{{bg}}"/><path d="M0,10 h20 M10,0 v10 M0,10 v10 M20,10 v10" fill="none" stroke="{{color}}" stroke-width="1.5"/></svg>` },
+  { id: "ext_hex", label: "Hexagons", svg: `<svg xmlns="http://www.w3.org/2000/svg" width="34.64" height="60"><rect width="34.64" height="60" fill="{{bg}}"/><path d="M17.32,0 L34.64,10 L34.64,30 L17.32,40 L0,30 L0,10 Z M17.32,60 L34.64,50 L34.64,30 M0,30 L0,50 L17.32,60" fill="none" stroke="{{color}}" stroke-width="2"/></svg>` }
+];
+
+const getExtraPatternUrl = (p: any, c: string, b: string) => {
+  const raw = p.svg.replace(/\{\{color\}\}/g, c).replace(/\{\{bg\}\}/g, b);
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(raw);
+};
+
 interface Props { onChange: (dataUrl: string) => void; }
 
-const CANVAS_W = 600;
-const CANVAS_H = 600;
 const SNAP_THRESHOLD = 6;
 
 type Tool = "select" | "brush" | "eraser" | "pattern" | "lasso" | "polygon" | "maskBrush";
@@ -33,6 +56,11 @@ export function FabricEditor({ onChange }: Props) {
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const historyRef = useRef<{ stack: string[]; index: number; lock: boolean }>({ stack: [], index: -1, lock: false });
+
+  // Canvas Dimension State
+  const [canvasSize, setCanvasSize] = useState({ w: 600, h: 600 });
+  const sizeRef = useRef(canvasSize);
+  useEffect(() => { sizeRef.current = canvasSize; }, [canvasSize]);
 
   const [bgColor, setBgColor] = useState("#ffffff");
   const [opacity, setOpacity] = useState(100);
@@ -169,7 +197,7 @@ export function FabricEditor({ onChange }: Props) {
   // Init mask when fabric canvas is ready
   useEffect(() => {
     if (!canvasRef.current) return;
-    if (!maskRef.current) maskRef.current = new SelectionMask(CANVAS_W, CANVAS_H);
+    if (!maskRef.current) maskRef.current = new SelectionMask(sizeRef.current.w, sizeRef.current.h);
     renderOverlay();
   }, [renderOverlay]);
 
@@ -188,7 +216,7 @@ export function FabricEditor({ onChange }: Props) {
       renderOverlay();
     } else if (tool === "maskBrush") {
       const buf = document.createElement("canvas");
-      buf.width = CANVAS_W; buf.height = CANVAS_H;
+      buf.width = sizeRef.current.w; buf.height = sizeRef.current.h;
       const bctx = buf.getContext("2d")!;
       m.paintStrokePoint(bctx, p.x, p.y, selBrushSize, selSymmetry);
       m.commitBuffer(buf, selMode);
@@ -209,7 +237,7 @@ export function FabricEditor({ onChange }: Props) {
       renderOverlay();
     } else if (tool === "maskBrush") {
       const buf = document.createElement("canvas");
-      buf.width = CANVAS_W; buf.height = CANVAS_H;
+      buf.width = sizeRef.current.w; buf.height = sizeRef.current.h;
       const bctx = buf.getContext("2d")!;
       // interpolate between last and current for smooth strokes
       const last = lastPtRef.current!;
@@ -232,7 +260,7 @@ export function FabricEditor({ onChange }: Props) {
     const m = maskRef.current; if (!m) return;
     if (tool === "lasso" && polyPtsRef.current.length >= 3) {
       const buf = document.createElement("canvas");
-      buf.width = CANVAS_W; buf.height = CANVAS_H;
+      buf.width = sizeRef.current.w; buf.height = sizeRef.current.h;
       const bctx = buf.getContext("2d")!;
       m.fillPolygon(bctx, polyPtsRef.current, selSymmetry);
       m.commitBuffer(buf, selMode);
@@ -247,7 +275,7 @@ export function FabricEditor({ onChange }: Props) {
     const m = maskRef.current; if (!m) return;
     if (polyPtsRef.current.length < 3) { polyPtsRef.current = []; renderOverlay(); return; }
     const buf = document.createElement("canvas");
-    buf.width = CANVAS_W; buf.height = CANVAS_H;
+    buf.width = sizeRef.current.w; buf.height = sizeRef.current.h;
     const bctx = buf.getContext("2d")!;
     m.fillPolygon(bctx, polyPtsRef.current, selSymmetry);
     m.commitBuffer(buf, selMode);
@@ -263,35 +291,42 @@ export function FabricEditor({ onChange }: Props) {
   const invertSelection = () => { maskRef.current?.invert(); renderOverlay(); };
 
   /** Apply the current canvas as a "fill source" only inside the selection.
-   *  This bakes the soft mask into the rasterised result so the 3D pipeline
-   *  picks it up automatically through the regular texture path. */
+   * This bakes the soft mask into the rasterised result so the 3D pipeline
+   * picks it up automatically through the regular texture path. */
   const applyInsideSelection = (fillKind: "color" | "pattern" | "gradient") => {
     const c = canvasRef.current; const m = maskRef.current; if (!c || !m) return;
     if (m.isEmpty()) { return; }
     // Build the fill onto a separate canvas the same size as the fabric canvas.
-    const w = CANVAS_W, h = CANVAS_H;
+    const w = sizeRef.current.w, h = sizeRef.current.h;
     const fill = document.createElement("canvas");
     fill.width = w; fill.height = h;
     const fctx = fill.getContext("2d")!;
     if (fillKind === "color") {
       fctx.fillStyle = brushColor; fctx.fillRect(0, 0, w, h);
+      bakeInside();
     } else if (fillKind === "pattern") {
-      const preset = PATTERN_PRESETS.find((p) => p.id === patternBrushId) ?? PATTERN_PRESETS[0];
+      const p1 = PATTERN_PRESETS.find((p) => p.id === patternBrushId);
+      const p2 = EXTRA_PATTERNS.find((p) => p.id === patternBrushId);
+      let pUrl = "";
+      if (p1) pUrl = patternToDataUrl(p1, patternColor, patternBg);
+      else if (p2) pUrl = getExtraPatternUrl(p2, patternColor, patternBg);
+      else pUrl = patternToDataUrl(PATTERN_PRESETS[0], patternColor, patternBg);
+
       const img = new Image();
       img.onload = () => {
         const pat = fctx.createPattern(img, "repeat");
         if (pat) { fctx.fillStyle = pat; fctx.fillRect(0, 0, w, h); }
         bakeInside();
       };
-      img.src = patternToDataUrl(preset, patternColor, patternBg);
+      img.src = pUrl;
       return; // async
     } else if (fillKind === "gradient") {
       const g = GRADIENT_PRESETS[0];
       const lg = fctx.createLinearGradient(0, 0, w, h);
       g.stops.forEach((s) => lg.addColorStop(s.offset, s.color));
       fctx.fillStyle = lg; fctx.fillRect(0, 0, w, h);
+      bakeInside();
     }
-    bakeInside();
 
     function bakeInside() {
       const maskUrl = m!.exportSoftMask({
@@ -336,7 +371,7 @@ export function FabricEditor({ onChange }: Props) {
   useEffect(() => {
     if (!canvasElRef.current) return;
     const c = new fabric.Canvas(canvasElRef.current, {
-      width: CANVAS_W, height: CANVAS_H, backgroundColor: bgColor, preserveObjectStacking: true,
+      width: canvasSize.w, height: canvasSize.h, backgroundColor: bgColor, preserveObjectStacking: true,
     });
     canvasRef.current = c;
 
@@ -387,6 +422,19 @@ export function FabricEditor({ onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Update logic when Aspect Ratio / size changes
+  useEffect(() => {
+    if (canvasRef.current) {
+      canvasRef.current.setDimensions({ width: canvasSize.w, height: canvasSize.h });
+      canvasRef.current.renderAll();
+    }
+    if (maskRef.current) {
+      maskRef.current = new SelectionMask(canvasSize.w, canvasSize.h);
+      setHasSelection(false);
+      renderOverlay();
+    }
+  }, [canvasSize, renderOverlay]);
+
   useEffect(() => {
     const c = canvasRef.current; if (!c) return;
     c.backgroundColor = bgColor; c.renderAll(); emit();
@@ -401,8 +449,13 @@ export function FabricEditor({ onChange }: Props) {
     } else if (tool === "eraser") {
       const b = new fabric.PencilBrush(c); b.color = bgColor; b.width = brushSize * 2; c.freeDrawingBrush = b;
     } else if (tool === "pattern") {
-      const preset = PATTERN_PRESETS.find((p) => p.id === patternBrushId) ?? PATTERN_PRESETS[0];
-      const dataUrl = patternToDataUrl(preset, patternColor, patternBg);
+      const p1 = PATTERN_PRESETS.find((p) => p.id === patternBrushId);
+      const p2 = EXTRA_PATTERNS.find((p) => p.id === patternBrushId);
+      let dataUrl = "";
+      if (p1) dataUrl = patternToDataUrl(p1, patternColor, patternBg);
+      else if (p2) dataUrl = getExtraPatternUrl(p2, patternColor, patternBg);
+      else dataUrl = patternToDataUrl(PATTERN_PRESETS[0], patternColor, patternBg);
+
       const img = new Image();
       img.onload = () => {
         if (!canvasRef.current) return;
@@ -464,8 +517,15 @@ export function FabricEditor({ onChange }: Props) {
   // ----- presets -----
   const applyPatternBg = async (id: string) => {
     const c = canvasRef.current; if (!c) return;
-    const p = PATTERN_PRESETS.find((x) => x.id === id); if (!p) return;
-    const url = patternToDataUrl(p, patternColor, patternBg);
+    let url = "";
+    const p1 = PATTERN_PRESETS.find((x) => x.id === id);
+    if (p1) {
+      url = patternToDataUrl(p1, patternColor, patternBg);
+    } else {
+      const p2 = EXTRA_PATTERNS.find((x) => x.id === id);
+      if (p2) url = getExtraPatternUrl(p2, patternColor, patternBg);
+      else return;
+    }
     const img = new Image();
     img.onload = () => {
       const pattern = new fabric.Pattern({ source: img, repeat: "repeat" });
@@ -474,6 +534,7 @@ export function FabricEditor({ onChange }: Props) {
     };
     img.src = url;
   };
+
   const applyGradientPreset = (id: string) => {
     const c = canvasRef.current; if (!c) return;
     const g = GRADIENT_PRESETS.find((x) => x.id === id); if (!g) return;
@@ -594,19 +655,23 @@ export function FabricEditor({ onChange }: Props) {
     };
   }, []);
 
-  // ----- responsive canvas -----
+  // ----- responsive canvas (scales perfectly to screen space) -----
   useEffect(() => {
     const el = stageRef.current; const c = canvasRef.current;
     if (!el || !c) return;
     const fit = () => {
-      const pad = 16;
-      const w = Math.max(240, Math.min(CANVAS_W, el.clientWidth - pad));
-      c.setDimensions({ width: w, height: w }, { cssOnly: true });
+      const padX = 40;
+      const padY = 40; // padding to prevent top/bottom touching
+      const maxW = el.clientWidth - padX;
+      const maxH = el.clientHeight - padY;
+      // scales down proportionally by whichever constraint is tighter
+      const scale = Math.min(maxW / canvasSize.w, maxH / canvasSize.h, 1); 
+      c.setDimensions({ width: canvasSize.w * scale, height: canvasSize.h * scale }, { cssOnly: true });
     };
     fit();
     const ro = new ResizeObserver(fit); ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [canvasSize]);
 
   // ----- keyboard shortcuts (V/B/E, Ctrl+Z/Y, Delete) -----
   useEffect(() => {
@@ -657,7 +722,31 @@ export function FabricEditor({ onChange }: Props) {
           <Sep />
           <ToolBtn label="Undo" onClick={undo}><Undo2 className="h-4 w-4" /></ToolBtn>
           <ToolBtn label="Redo" onClick={redo}><Redo2 className="h-4 w-4" /></ToolBtn>
+          
           <div className="flex shrink-0 items-center gap-1.5 sm:ml-auto sm:pl-2">
+            
+            {/* Aspect Ratio Selector */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  title="Canvas Aspect Ratio"
+                  className="flex h-9 items-center justify-center gap-1.5 rounded-md border bg-background px-2 shadow-sm hover:bg-muted sm:w-auto"
+                >
+                  <Crop className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="hidden sm:inline-block text-xs font-medium">Ratio</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="center" sideOffset={6} className="w-[140px] p-2">
+                <div className="grid grid-cols-1 gap-1">
+                  <Button variant="ghost" size="sm" className="h-8 justify-start text-xs" onClick={() => setCanvasSize({w: 600, h: 600})}>1:1 Square</Button>
+                  <Button variant="ghost" size="sm" className="h-8 justify-start text-xs" onClick={() => setCanvasSize({w: 450, h: 800})}>9:16 Vertical</Button>
+                  <Button variant="ghost" size="sm" className="h-8 justify-start text-xs" onClick={() => setCanvasSize({w: 800, h: 450})}>16:9 Horizontal</Button>
+                  <Button variant="ghost" size="sm" className="h-8 justify-start text-xs" onClick={() => setCanvasSize({w: 600, h: 750})}>4:5 Portrait</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
             <Popover>
               <PopoverTrigger asChild>
                 <button
@@ -680,7 +769,7 @@ export function FabricEditor({ onChange }: Props) {
                     const c = canvasRef.current;
                     if (!c) return;
                     fabric.FabricImage.fromURL(url, { crossOrigin: "anonymous" }).then((img) => {
-                      img.scaleToWidth(CANVAS_W);
+                      img.scaleToWidth(canvasSize.w);
                       img.set({ left: 0, top: 0, selectable: true });
                       c.add(img);
                       c.requestRenderAll();
@@ -697,13 +786,13 @@ export function FabricEditor({ onChange }: Props) {
         {/* Canvas + panel */}
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pb-20 lg:flex-row lg:overflow-hidden lg:pb-0">
           <div ref={stageRef}
-            className="flex min-h-[280px] shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-[conic-gradient(at_50%_50%,#e9e9ef_25%,#fafafa_0_50%,#e9e9ef_0_75%,#fafafa_0)] bg-[length:24px_24px] p-2 dark:bg-[conic-gradient(at_50%_50%,#2a2a36_25%,#1e1e28_0_50%,#2a2a36_0_75%,#1e1e28_0)] lg:flex-1 lg:shrink">
+            className="flex min-h-[300px] w-full shrink-0 items-center justify-center overflow-auto pb-12 rounded-xl border bg-[conic-gradient(at_50%_50%,#e9e9ef_25%,#fafafa_0_50%,#e9e9ef_0_75%,#fafafa_0)] bg-[length:24px_24px] p-4 dark:bg-[conic-gradient(at_50%_50%,#2a2a36_25%,#1e1e28_0_50%,#2a2a36_0_75%,#1e1e28_0)] lg:flex-1 lg:shrink">
             <div className="relative rounded-md shadow-2xl ring-1 ring-black/5">
               <canvas ref={canvasElRef} className="touch-none rounded-md" />
               <canvas
                 ref={overlayElRef}
-                width={CANVAS_W}
-                height={CANVAS_H}
+                width={canvasSize.w}
+                height={canvasSize.h}
                 onPointerDown={onOverlayPointerDown}
                 onPointerMove={onOverlayPointerMove}
                 onPointerUp={onOverlayPointerUp}
@@ -737,6 +826,8 @@ export function FabricEditor({ onChange }: Props) {
                 <div>
                   <Label className="text-xs">Tap to set as background pattern</Label>
                   <div className="mt-1 grid grid-cols-4 gap-2">
+                    
+                    {/* 1. ORIGINAL PRESETS */}
                     {PATTERN_PRESETS.map((p) => (
                       <Tooltip key={p.id}>
                         <TooltipTrigger asChild>
@@ -748,6 +839,33 @@ export function FabricEditor({ onChange }: Props) {
                         <TooltipContent>{p.label}</TooltipContent>
                       </Tooltip>
                     ))}
+                    
+                    {/* 2. ISOLATED MORE BUTTON POPOVER */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="aspect-square flex flex-col items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 hover:bg-muted/50 hover:border-solid hover:ring-2 hover:ring-primary transition-all text-muted-foreground hover:text-foreground">
+                          <MoreHorizontal className="h-5 w-5 mb-0.5" />
+                          <span className="text-[10px] font-medium leading-none">More</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="left" className="w-[260px] p-3">
+                        <div className="text-xs font-semibold mb-2">Vector Patterns</div>
+                        <div className="grid grid-cols-4 gap-2 max-h-[300px] overflow-y-auto pr-1">
+                          {EXTRA_PATTERNS.map((p) => (
+                            <Tooltip key={p.id}>
+                              <TooltipTrigger asChild>
+                                <button onClick={() => applyPatternBg(p.id)}
+                                  className="aspect-square overflow-hidden rounded-md border bg-white transition hover:ring-2 hover:ring-primary" aria-label={p.label}>
+                                  <img src={getExtraPatternUrl(p, patternColor, patternBg)} alt={p.label} className="h-full w-full object-cover" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>{p.label}</TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
                   </div>
                 </div>
                 <div>
@@ -772,12 +890,41 @@ export function FabricEditor({ onChange }: Props) {
                 <div>
                   <Label className="text-xs">Pattern</Label>
                   <div className="mt-1 grid grid-cols-4 gap-2">
+                    
+                    {/* 1. ORIGINAL PRESETS */}
                     {PATTERN_PRESETS.map((p) => (
                       <button key={p.id} onClick={() => setPatternBrushId(p.id)}
                         className={`aspect-square overflow-hidden rounded-md border bg-white transition hover:ring-2 hover:ring-primary ${patternBrushId === p.id ? "ring-2 ring-primary" : ""}`}>
                         <img src={patternToDataUrl(p, patternColor, patternBg)} alt={p.label} className="h-full w-full object-cover" />
                       </button>
                     ))}
+
+                    {/* 2. ISOLATED MORE BUTTON POPOVER FOR BRUSH */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="aspect-square flex flex-col items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 hover:bg-muted/50 hover:border-solid hover:ring-2 hover:ring-primary transition-all text-muted-foreground hover:text-foreground">
+                          <MoreHorizontal className="h-5 w-5 mb-0.5" />
+                          <span className="text-[10px] font-medium leading-none">More</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="left" className="w-[260px] p-3">
+                        <div className="text-xs font-semibold mb-2">Vector Patterns</div>
+                        <div className="grid grid-cols-4 gap-2 max-h-[300px] overflow-y-auto pr-1">
+                          {EXTRA_PATTERNS.map((p) => (
+                            <Tooltip key={p.id}>
+                              <TooltipTrigger asChild>
+                                <button onClick={() => setPatternBrushId(p.id)}
+                                  className={`aspect-square overflow-hidden rounded-md border bg-white transition hover:ring-2 hover:ring-primary ${patternBrushId === p.id ? "ring-2 ring-primary" : ""}`}>
+                                  <img src={getExtraPatternUrl(p, patternColor, patternBg)} alt={p.label} className="h-full w-full object-cover" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>{p.label}</TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
                   </div>
                 </div>
                 <div>
