@@ -29,7 +29,7 @@ export default defineConfig(({ command }) => ({
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
       server: { entry: "server",
-        preset: "vercel"
+        preset: "netlify"
        },
       
       importProtection: {
