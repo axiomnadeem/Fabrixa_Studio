@@ -134,6 +134,42 @@ export const GARMENT_TYPES: GarmentType[] = [
     meshMap: { body: "body", sleeve: "sleeves", neck: "neckline", hem: "hem" },
   },
   {
+  id: "kurti_long",
+  label: "Kurti (Long)",
+  emoji: "👗",
+  gender: "women",
+  parts: [
+    P("body", "Body", "#f5e6ff"),
+    P("sleeves", "Sleeves", "#f5e6ff"),
+    P("hem", "Hem", "#e8d2ff"),
+  ],
+  modelPath: "models/kurti long.glb",
+  meshMap: {
+    body: "body",
+    sleeve: "sleeves",
+    hem: "hem",
+  },
+},
+{
+  id: "kurti_long_neck",
+  label: "Kurti (Long Neck)",
+  emoji: "👗",
+  gender: "women",
+  parts: [
+    P("body", "Body", "#f5e6ff"),
+    P("sleeves", "Sleeves", "#f5e6ff"),
+    P("neck", "Neck Design", "#d9b3ff"),
+    P("hem", "Hem", "#e8d2ff"),
+  ],
+  modelPath: "models/kurti long neck.glb",
+  meshMap: {
+    body: "body",
+    sleeve: "sleeves",
+    neck: "neck",
+    hem: "hem",
+  },
+},
+  {
     id: "kurta", label: "Kurta", emoji: "🕴️", gender: "men",
     parts: [P("body", "Kurta Body", "#f4f1e8"), P("sleeves", "Sleeves", "#f4f1e8"), P("collar", "Mandarin Collar", "#d4af37"), P("placket", "Placket", "#d4af37"), P("buttons", "Buttons", "#3b1f1f")],
     modelPath: "models/kurta.glb",
