@@ -28,7 +28,7 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
-      server: { entry: "server",
+      server: {
         preset: "netlify"
        },
       
