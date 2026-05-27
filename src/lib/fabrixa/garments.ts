@@ -143,7 +143,7 @@ export const GARMENT_TYPES: GarmentType[] = [
     P("sleeves", "Sleeves", "#f5e6ff"),
     P("hem", "Hem", "#e8d2ff"),
   ],
-  modelPath: "models/kurti long.glb",
+  modelPath: "models/kurti_long.glb",
   meshMap: {
     body: "body",
     sleeve: "sleeves",
@@ -161,7 +161,7 @@ export const GARMENT_TYPES: GarmentType[] = [
     P("neck", "Neck Design", "#d9b3ff"),
     P("hem", "Hem", "#e8d2ff"),
   ],
-  modelPath: "models/kurti long neck.glb",
+  modelPath: "models/kurti_long_neck.glb",
   meshMap: {
     body: "body",
     sleeve: "sleeves",

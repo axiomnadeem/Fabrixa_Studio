@@ -75,14 +75,6 @@ interface FabrixaApi {
   loadImage: (dataUrl: string, opts?: { replaceCanvas?: boolean }) => Promise<void>;
 }
 
-/** Composite a pattern image inside a UV-space alpha mask.
- *
- *  If `baseTextureUrl` is provided, the *existing* texture is used as the
- *  background so unselected regions stay completely untouched. Otherwise
- *  the unselected region is filled with `baseColor` (legacy behaviour).
- *
- *  Result: only the lassoed region shows the new pattern; everything
- *  outside the mask keeps its previous look. */
 async function compositeWithMask(
   patternUrl: string,
   maskUrl: string,
@@ -104,14 +96,12 @@ async function compositeWithMask(
   ]);
   const W = mask.width || 1024;
   const H = mask.height || 1024;
-  // pattern × mask
   const tmp = document.createElement("canvas");
   tmp.width = W; tmp.height = H;
   const tctx = tmp.getContext("2d")!;
   tctx.drawImage(pat, 0, 0, W, H);
   tctx.globalCompositeOperation = "destination-in";
   tctx.drawImage(maskImageToAlphaCanvas(mask, W, H), 0, 0);
-  // base layer: existing texture if any, else solid color.
   const out = document.createElement("canvas");
   out.width = W; out.height = H;
   const octx = out.getContext("2d")!;
@@ -188,7 +178,6 @@ export function FabrixaApp() {
     if (!isGarmentAvailable(typeId)) setTypeId(DEFAULT_GARMENT_ID);
   }, [typeId]);
 
-  // partStates is global across all garment types; keys are "type.part"
   const [partStates, setPartStates] = useState<Record<string, PartState>>(() => {
     let obj: Record<string, PartState> = {};
     for (const g of GARMENT_TYPES) obj = { ...obj, ...initStatesFor(g) };
@@ -225,7 +214,31 @@ export function FabrixaApp() {
   const subTier = useSubscriptionStore((s) => s.subscriptionTier);
   const adminMode = useSubscriptionStore((s) => s.adminMode);
   const coinBalance = useSubscriptionStore((s) => s.coinBalance);
+  
   useEffect(() => { applyDailyResetIfNeeded(); }, [applyDailyResetIfNeeded]);
+
+  // Handle Daily Coin Renewal API check
+  const { user, signOut } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    const checkDailyReset = async () => {
+      try {
+        const res = await fetch("/api/daily-reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.uid })
+        });
+        const data = await res.json();
+        if (data.refreshed) {
+          useSubscriptionStore.getState().hydrateFromUserDoc({ coinBalance: data.balance });
+          toast.success(`Daily reset! Your coins have been refreshed to ${data.balance}.`);
+        }
+      } catch (e) {
+        console.error("Failed to check daily reset", e);
+      }
+    };
+    checkDailyReset();
+  }, [user]);
 
   useEffect(() => {
     if (adminMode) return;
@@ -235,16 +248,12 @@ export function FabrixaApp() {
     if (allowed.length > 0) setTypeId(allowed[0].id);
   }, [typeId, subTier, adminMode]);
 
-  // Open Pricing whenever the gatekeeper dialog requests it.
   useEffect(() => {
     const open = () => setPricingOpen(true);
     window.addEventListener("fabrixa:open-pricing", open);
     return () => window.removeEventListener("fabrixa:open-pricing", open);
   }, []);
 
-  // Mirror entitlements (DB users row) into the Zustand store on every
-  // refetch. This is the bridge that keeps the visible coin balance in
-  // the topbar / CoinCostBadge buttons honest after `spend_feature` runs.
   const { data: entData } = useEntitlements();
   const hydrateFromUserDoc = useSubscriptionStore((s) => s.hydrateFromUserDoc);
   useEffect(() => {
@@ -280,17 +289,15 @@ export function FabrixaApp() {
   );
   const [lassoActive, setLassoActive] = useState(false);
   const [lassoMode, setLassoMode] = useState<"freehand" | "polygon">("freehand");
-  // Selection-region editor state (inside 3D view)
   const [regionFillKind, setRegionFillKind] = useState<"color" | "pattern" | "gradient">("color");
   const [regionColor, setRegionColor] = useState<string>("#7e3c8c");
   const [regionPatternId, setRegionPatternId] = useState<string>(PATTERN_PRESETS[0].id);
   const [regionGradientId, setRegionGradientId] = useState<string>(GRADIENT_PRESETS[0].id);
   const [regionPreviewUrl, setRegionPreviewUrl] = useState<string | null>(null);
-  const { user, signOut } = useAuth();
+  
   const autoLoadedRef = useMemo(() => ({ done: false }), []);
-
-  // Credit ledger — local + cloud
   const [ledger, setLedger] = useState<CreditLedger>(() => emptyLedger());
+  
   useEffect(() => {
     let alive = true;
     loadLedger(user?.uid ?? null).then((l) => { if (alive) setLedger(l); });
@@ -319,14 +326,12 @@ export function FabrixaApp() {
     return true;
   };
 
-  // Apply theme via data-theme attribute
   useEffect(() => {
     if (themeId === "default") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", themeId);
     localStorage.setItem("fabrixa:theme", themeId);
   }, [themeId]);
 
-  // Persist part states
   useEffect(() => {
     try { localStorage.setItem("fabrixa:parts-v2", JSON.stringify(partStates)); } catch { /* ignore */ }
   }, [partStates]);
@@ -337,8 +342,6 @@ export function FabrixaApp() {
     }
   }, []);
 
-  // Idle-preload every garment model so switching between garments is instant
-  // after first paint. Errors silently fall back to the procedural mesh.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const idle = (cb: () => void) => {
@@ -355,11 +358,9 @@ export function FabrixaApp() {
   }, []);
 
 
-  // When type changes, ensure activePart is one of the new parts
   useEffect(() => {
     const first = partKey(garment.id, garment.parts[0].id);
     if (!activePart.startsWith(garment.id + ".")) setActivePart(first);
-    // also ensure all parts exist
     setPartStates((prev) => {
       const next = { ...prev };
       for (const p of garment.parts) {
@@ -387,7 +388,6 @@ export function FabrixaApp() {
     if (!designUrl) { toast.error("Add something to the canvas first"); return; }
     const state = partStates[activePart];
     const hasMask = !!state?.selectionMaskDataUrl;
-    // Masked apply costs half of a full part-replace. Gate accordingly.
     const feature = hasMask ? "MASKED_APPLY" : "APPLY_TO_MODEL";
     await runGated(feature, async () => {
       let finalUrl = designUrl;
@@ -397,7 +397,6 @@ export function FabrixaApp() {
             designUrl,
             state.selectionMaskDataUrl,
             state.color,
-            // Preserve previous texture outside the lassoed region.
             state.textureDataUrl ?? null,
           );
           toast.success(`Applied inside selection on ${activeLabel}`);
@@ -414,8 +413,6 @@ export function FabrixaApp() {
         [activePart]: {
           ...prev[activePart],
           textureDataUrl: finalUrl,
-          // A masked texture is authored in UV space at 1:1 — world-space
-          // triplanar tiling would scatter it across the whole part.
           ...(hasMask ? {
             tilingMode: "uv" as const,
             textureScale: 1,
@@ -449,9 +446,6 @@ export function FabrixaApp() {
     a.href = dataUrl; a.download = name; a.click();
   };
 
-  /** Re-encode `designUrl` (or any source data URL) to the requested format
-   *  at the requested multiplier. Used as a fallback when FabricEditor isn't
-   *  mounted (3D / AI views) so exports still work everywhere. */
   const reencodeDataUrl = async (
     src: string, format: "png" | "jpeg" | "webp", mult: number, quality?: number,
     transparent = false,
@@ -535,7 +529,6 @@ export function FabrixaApp() {
     });
   };
 
-  // ----- Cloud save / load -----
   const handleSave = async () => {
     if (!user) {
       try { localStorage.setItem("fabrixa:parts-v2", JSON.stringify(partStates)); } catch { /* ignore */ }
@@ -554,7 +547,6 @@ export function FabrixaApp() {
     });
   };
 
-
   const handleLoadCloud = async () => {
     if (!user) {
       toast.info("Sign in to load from cloud");
@@ -572,7 +564,6 @@ export function FabrixaApp() {
     }
   };
 
-  // Auto-load once after sign-in
   useEffect(() => {
     if (!user || autoLoadedRef.done) return;
     autoLoadedRef.done = true;
@@ -584,17 +575,11 @@ export function FabrixaApp() {
     }).catch(() => { /* ignore */ });
   }, [user, autoLoadedRef]);
 
-  // 3D preview is FREE — coins are only spent on AI generation and export/save.
-  // We still record analytics for cloud-signed users.
   useEffect(() => {
     if (view !== "preview" || !user) return;
     void recordRender3d(user.uid, { typeId, scene: sceneId });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, typeId, user]);
 
-  // ------- Tile-gap compositor: bake gutters around the user's tile so the
-  // white base material shows through evenly when tileGap > 0. Runs only
-  // when texture or gap changes on the active part.
   useEffect(() => {
     const st = partStates[activePart];
     if (!st) return;
@@ -627,12 +612,8 @@ export function FabrixaApp() {
       } catch { /* ignore */ }
     }, 120);
     return () => { cancelled = true; clearTimeout(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePart, partStates[activePart]?.textureDataUrl, partStates[activePart]?.tileGap]);
 
-  /** Compose the selection fill into a UV-space texture, returning the
-   *  resulting data URL (or null if no mask is set). Pure — does not mutate
-   *  state, so it's reused for both the live preview and the apply action. */
   const composeSelectionFill = async (): Promise<string | null> => {
     const state = partStates[activePart];
     if (!state?.selectionMaskDataUrl) return null;
@@ -675,9 +656,6 @@ export function FabrixaApp() {
     return out.toDataURL("image/png");
   };
 
-  /** Bake the selection fill into the part texture and force UV tiling so
-   *  the mask actually aligns to the lassoed region (world-space triplanar
-   *  would scatter it across the whole part). */
   const applyToSelection = async () => {
     const state = partStates[activePart];
     if (!state?.selectionMaskDataUrl) {
@@ -703,7 +681,6 @@ export function FabrixaApp() {
     });
   };
 
-  // Live preview of the masked fill (debounced via effect cleanup).
   useEffect(() => {
     let cancelled = false;
     const state = partStates[activePart];
@@ -712,7 +689,6 @@ export function FabrixaApp() {
       composeSelectionFill().then((url) => { if (!cancelled) setRegionPreviewUrl(url); }).catch(() => {});
     }, 120);
     return () => { cancelled = true; clearTimeout(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePart, regionFillKind, regionColor, regionPatternId, regionGradientId,
       partStates[activePart]?.selectionMaskDataUrl, partStates[activePart]?.textureDataUrl,
       partStates[activePart]?.color]);
@@ -725,8 +701,8 @@ export function FabrixaApp() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex h-screen flex-col bg-background text-foreground">
-        {/* TOP BAR */}
-        <header className="flex h-14 shrink-0 items-center gap-1.5 border-b bg-panel/80 px-2 backdrop-blur sm:gap-2 sm:px-4">
+        {/* PREMIUM GLASSMORPHIC TOP BAR */}
+        <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-white/10 bg-background/60 px-2 backdrop-blur-2xl shadow-sm sm:gap-2 sm:px-4 z-50">
           <div className="flex items-center gap-2">
             <div className="hidden h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-md sm:flex">
               <Sparkles className="h-4 w-4" />
@@ -738,7 +714,7 @@ export function FabrixaApp() {
           </div>
 
           <Tabs value={view} onValueChange={(v) => setView(v as "design" | "preview" | "ai")} className="sm:ml-4">
-            <TabsList className="h-9">
+            <TabsList className="h-9 bg-panel/50 backdrop-blur-md border border-white/5">
               <TabsTrigger value="design" className="gap-1.5 text-xs">
                 <Wand2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Design</span><span className="sm:hidden">2D</span>
               </TabsTrigger>
@@ -751,19 +727,16 @@ export function FabrixaApp() {
             </TabsList>
           </Tabs>
 
-          {/* Garment type picker — grouped by Women / Men / Unisex (nested submenus) */}
           <GarmentMenu
             value={typeId}
             onChange={(v) => setTypeId(v)}
             className="ml-1 hidden sm:flex w-44"
           />
 
-
           <div className="ml-auto flex min-w-0 items-center gap-1">
-            {/* Credits chip */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="hidden items-center gap-1 rounded-full border bg-panel px-2.5 py-1 text-xs tabular-nums hover:bg-muted sm:inline-flex"
+                <button className="hidden items-center gap-1 rounded-full border border-white/10 bg-panel/40 px-2.5 py-1 text-xs tabular-nums hover:bg-muted/50 sm:inline-flex backdrop-blur-md"
                   onClick={() => setView("ai")}>
                   <Coins className="h-3.5 w-3.5 text-primary" />
                   <span>{coinBalance}</span>
@@ -778,12 +751,11 @@ export function FabrixaApp() {
             <Button
               size="sm"
               variant="outline"
-              className="hidden h-7 px-2 text-xs sm:inline-flex"
+              className="hidden h-7 px-2 text-xs sm:inline-flex bg-panel/40 backdrop-blur-md border-white/10"
               onClick={() => setPricingOpen(true)}
             >
               {subTier ? "Manage plan" : "Upgrade"}
             </Button>
-
 
             {view === "design" && (() => {
               const hasMask = !!partStates[activePart]?.selectionMaskDataUrl;
@@ -810,9 +782,6 @@ export function FabrixaApp() {
               );
             })()}
 
-
-
-            {/* Desktop-only quick actions */}
             <div className="hidden items-center gap-1 sm:flex">
               <IconBtn label="Neck Designer" onClick={() => setNeckOpen(true)}><Scissors className="h-4 w-4" /></IconBtn>
               <IconBtn label={user ? "Save to cloud" : "Save (local)"} onClick={handleSave}>
@@ -820,9 +789,9 @@ export function FabrixaApp() {
               </IconBtn>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" title="Export"><Download className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" title="Export" className="hover:bg-white/5"><Download className="h-4 w-4" /></Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 bg-background/80 backdrop-blur-2xl border-white/10">
                   <DropdownMenuLabel>Export design</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => { setExportFormat("png"); setExportOpen(true); }}><FileImage className="mr-2 h-4 w-4" />PNG…</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { setExportFormat("jpg"); setExportOpen(true); }}><ImageDown className="mr-2 h-4 w-4" />JPG…</DropdownMenuItem>
@@ -838,14 +807,13 @@ export function FabrixaApp() {
               <IconBtn label="Settings" onClick={() => setSettingsOpen(true)}><Settings className="h-4 w-4" /></IconBtn>
             </div>
 
-            {/* Mobile overflow — every non-essential action collapses here */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="sm:hidden" title="More">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56 bg-background/80 backdrop-blur-2xl border-white/10">
                 <DropdownMenuLabel className="flex items-center justify-between">
                   <span>Actions</span>
                   <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground tabular-nums">
@@ -873,14 +841,14 @@ export function FabrixaApp() {
             {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="hidden sm:inline-flex" title={user.email ?? "Account"}>
+                  <Button variant="outline" size="icon" className="hidden sm:inline-flex border-white/10 bg-panel/40 backdrop-blur-md" title={user.email ?? "Account"}>
                     <Avatar className="h-6 w-6">
                       {user.photoURL ? <AvatarImage src={user.photoURL} /> : null}
                       <AvatarFallback className="text-[10px]">{(user.email ?? "U")[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 bg-background/80 backdrop-blur-2xl border-white/10">
                   <DropdownMenuLabel className="truncate">{user.displayName ?? user.email}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSave}><Cloud className="mr-2 h-4 w-4" />Save to cloud</DropdownMenuItem>
@@ -901,15 +869,12 @@ export function FabrixaApp() {
           </div>
         </header>
 
-        {/* Mobile garment picker — same nested menu as desktop */}
-        <div className="flex shrink-0 items-center gap-2 border-b bg-panel/40 px-3 py-1.5 sm:hidden">
+        <div className="flex shrink-0 items-center gap-2 border-b border-white/10 bg-background/40 px-3 py-1.5 sm:hidden backdrop-blur-xl">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Garment</span>
           <GarmentMenu value={typeId} onChange={(v) => setTypeId(v)} className="min-w-0 flex-1" mobile />
         </div>
 
-
-        {/* Active-part bar (depends on garment type) */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-panel/40 px-3 py-2 backdrop-blur sm:flex-nowrap sm:overflow-x-auto">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-background/40 px-3 py-2 backdrop-blur-xl sm:flex-nowrap sm:overflow-x-auto">
           <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Editing</span>
           {garment.parts.map((p) => {
             const k = partKey(garment.id, p.id);
@@ -917,7 +882,7 @@ export function FabrixaApp() {
               <button key={k} onClick={() => setActivePart(k)}
                 className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${
                   activePart === k ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                   : "border-border bg-background hover:bg-muted"
+                                   : "border-border bg-background/50 hover:bg-muted"
                 }`}>
                 {p.label}
               </button>
@@ -933,10 +898,10 @@ export function FabrixaApp() {
               <FabricEditor onChange={setDesignUrl} />
             </div>
           ) : view === "ai" ? (
-            <div className="h-full overflow-auto">
+            <div className="h-full overflow-auto bg-background/40 backdrop-blur-xl">
               <AIStudioPanel
                 balance={coinBalance}
-                onResult={async (url, meta) => {
+                onResult={async (url, meta, action) => {
                   if (meta.model !== "upload" && user) {
                     void recordAiDesign(user.uid, {
                       task: meta.task,
@@ -944,17 +909,26 @@ export function FabrixaApp() {
                       model: meta.model,
                     });
                   }
-                  setView("design");
-                  // wait one tick so the FabricEditor mounts and registers its API
-                  setTimeout(() => { void api()?.loadImage(url, { replaceCanvas: true }); setDesignUrl(url); }, 80);
-                  toast.success("Loaded into 2D editor");
+                  
+                  if (action === "apply_3d") {
+                    setPartStates((prev) => ({
+                      ...prev,
+                      [activePart]: { ...prev[activePart], textureDataUrl: url, tilingMode: "world" },
+                    }));
+                    setView("preview");
+                    toast.success(`Applied AI design directly to ${activeLabel}`);
+                  } else if (action === "edit_2d") {
+                    setView("design");
+                    setTimeout(() => { void api()?.loadImage(url, { replaceCanvas: true }); setDesignUrl(url); }, 80);
+                    toast.success("Loaded into 2D editor");
+                  }
                 }}
               />
             </div>
           ) : (
             <div className="grid h-full grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-[1fr_320px]">
               <div className="flex h-[70vh] min-h-[420px] flex-col gap-2 overflow-hidden lg:h-auto lg:min-h-[50vh]">
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-panel/80 p-2 backdrop-blur">
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-background/40 p-2 backdrop-blur-xl shadow-lg">
                   <div className="flex items-center gap-1">
                     {SCENE_PRESETS.map((s) => (
                       <button key={s.id} onClick={() => setSceneId(s.id)}
@@ -968,7 +942,7 @@ export function FabrixaApp() {
                       size="sm"
                       variant={lassoActive ? "default" : "outline"}
                       onClick={() => { setLassoMode("freehand"); setLassoActive((v) => !v); }}
-                      className="h-7 gap-1 text-xs"
+                      className="h-7 gap-1 text-xs bg-background/50 border-white/10"
                     >
                       <Scissors className="h-3.5 w-3.5" />
                       {lassoActive && lassoMode === "freehand" ? "Freehand…" : "Freehand"}
@@ -977,7 +951,7 @@ export function FabrixaApp() {
                       size="sm"
                       variant={lassoActive && lassoMode === "polygon" ? "default" : "outline"}
                       onClick={() => { setLassoMode("polygon"); setLassoActive(true); }}
-                      className="h-7 gap-1 text-xs"
+                      className="h-7 gap-1 text-xs bg-background/50 border-white/10"
                     >
                       <Scissors className="h-3.5 w-3.5" />
                       {lassoActive && lassoMode === "polygon" ? "Polygon…" : "Polygon"}
@@ -992,7 +966,7 @@ export function FabrixaApp() {
                     </Label>
                   </div>
                 </div>
-                <div className="relative flex-1 min-h-[min(70vh,720px)] overflow-hidden rounded-xl border bg-panel"
+                <div className="relative flex-1 min-h-[min(70vh,720px)] overflow-hidden rounded-2xl border border-white/10 bg-panel shadow-inner"
                   style={sceneId === "transparent" ? {
                     backgroundImage: "conic-gradient(at 50% 50%, #e9e9ef 25%, #fafafa 0 50%, #e9e9ef 0 75%, #fafafa 0)",
                     backgroundSize: "24px 24px",
@@ -1042,18 +1016,18 @@ export function FabrixaApp() {
               </div>
 
               {/* Per-part controls */}
-              <div className="rounded-xl border bg-panel/80 p-3 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-background/50 p-4 backdrop-blur-2xl shadow-2xl">
                 <div className="mb-3 flex items-center justify-between">
                   <Label className="text-xs uppercase text-muted-foreground">{activeLabel}</Label>
-                  <Button size="sm" variant="outline" onClick={() => setView("design")}>
+                  <Button size="sm" variant="outline" className="bg-background/40 border-white/10" onClick={() => setView("design")}>
                     <Wand2 className="mr-1.5 h-3.5 w-3.5" />Edit design
                   </Button>
                 </div>
 
-                <div className="mb-3 aspect-square w-full overflow-hidden rounded-md border bg-[conic-gradient(at_50%_50%,#e9e9ef_25%,#fafafa_0_50%,#e9e9ef_0_75%,#fafafa_0)] bg-[length:16px_16px]">
+                <div className="mb-3 aspect-square w-full overflow-hidden rounded-md border border-white/10 bg-[conic-gradient(at_50%_50%,#e9e9ef_25%,#fafafa_0_50%,#e9e9ef_0_75%,#fafafa_0)] bg-[length:16px_16px]">
                   {activeState.textureDataUrl
                     ? <img src={activeState.textureDataUrl} alt="texture" className="h-full w-full object-cover" />
-                    : <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No texture yet</div>}
+                    : <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground bg-panel/30">No texture yet</div>}
                 </div>
 
                 <div className="space-y-3">
@@ -1074,7 +1048,7 @@ export function FabrixaApp() {
                       value={activeState.fabricPreset ?? "cotton"}
                       onValueChange={(v) => updateActivePart({ fabricPreset: v as FabricPresetId })}
                     >
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 bg-background/40"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {FABRIC_PRESET_IDS.map((id) => (
                           <SelectItem key={id} value={id} className="capitalize">{id}</SelectItem>
@@ -1091,7 +1065,7 @@ export function FabrixaApp() {
                           className={`rounded-md border px-2 py-1.5 text-xs transition ${
                             (activeState.tilingMode ?? APP_DATA_0.tiling.defaultMode) === m
                               ? "border-primary bg-primary/10 text-foreground"
-                              : "border-border hover:bg-muted"
+                              : "border-border hover:bg-muted/50 bg-background/30"
                           }`}>
                           {m === "world" ? "World (seamless)" : "UV (per-mesh)"}
                         </button>
@@ -1113,27 +1087,26 @@ export function FabrixaApp() {
                     min={0} max={50} step={1}
                     onChange={(v) => updateActivePart({ tileGap: v })}
                   />
-                  <div className="flex items-center justify-between rounded-md border bg-background px-2 py-1.5">
+                  <div className="flex items-center justify-between rounded-md border border-white/5 bg-background/30 px-2 py-1.5 backdrop-blur-sm">
                     <Label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Grid3x3 className="h-3.5 w-3.5" />Tiling overlay
                     </Label>
                     <Switch checked={showTilingOverlay} onCheckedChange={setShowTilingOverlay} />
                   </div>
-                  <Button size="sm" className="w-full" onClick={() => applyToModel(false)} disabled={!designUrl}>
+                  <Button size="sm" className="w-full shadow-md" onClick={() => applyToModel(false)} disabled={!designUrl}>
                     <CheckCircle2 className="mr-1.5 h-4 w-4" />Apply current design here
                     <CoinCostBadge feature={activeState.selectionMaskDataUrl ? "MASKED_APPLY" : "APPLY_TO_MODEL"} />
                   </Button>
                   {activeState.textureDataUrl && (
-                    <Button size="sm" variant="ghost" className="w-full text-xs text-muted-foreground" onClick={() => updateActivePart({ textureDataUrl: null })}>
+                    <Button size="sm" variant="ghost" className="w-full text-xs text-muted-foreground hover:bg-white/5" onClick={() => updateActivePart({ textureDataUrl: null })}>
                       Remove texture
                     </Button>
                   )}
 
-                  {/* ===== 3D Selection Region Editor ===== */}
-                  <div className="mt-2 space-y-2 rounded-lg border bg-panel/60 p-2.5">
+                  <div className="mt-2 space-y-2 rounded-xl border border-white/5 bg-panel/30 p-3 backdrop-blur-md shadow-inner">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs uppercase text-muted-foreground">Selected region</Label>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${activeState.selectionMaskDataUrl ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${activeState.selectionMaskDataUrl ? "bg-primary text-primary-foreground shadow" : "bg-muted/50 text-muted-foreground"}`}>
                         {activeState.selectionMaskDataUrl ? "Active" : "None"}
                       </span>
                     </div>
@@ -1143,7 +1116,7 @@ export function FabrixaApp() {
                     <div className="grid grid-cols-3 gap-1">
                       {(["color","pattern","gradient"] as const).map((k) => (
                         <button key={k} onClick={() => setRegionFillKind(k)}
-                          className={`rounded-md border px-2 py-1 text-[11px] capitalize transition ${regionFillKind === k ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}>
+                          className={`rounded-md border px-2 py-1 text-[11px] capitalize transition ${regionFillKind === k ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50 bg-background/40"}`}>
                           {k}
                         </button>
                       ))}
@@ -1160,17 +1133,17 @@ export function FabrixaApp() {
                         <div className="grid grid-cols-4 gap-1.5">
                           {PATTERN_PRESETS.slice(0, 8).map((p) => (
                             <button key={p.id} onClick={() => setRegionPatternId(p.id)}
-                              className={`aspect-square overflow-hidden rounded-md border bg-white transition hover:ring-2 hover:ring-primary ${regionPatternId === p.id ? "ring-2 ring-primary" : ""}`}
+                              className={`aspect-square overflow-hidden rounded-md border border-white/20 bg-white transition hover:ring-2 hover:ring-primary shadow-sm ${regionPatternId === p.id ? "ring-2 ring-primary" : ""}`}
                               title={p.label}>
                               <img src={patternToDataUrl(p, regionColor, "#ffffff")} alt={p.label} className="h-full w-full object-cover" />
                             </button>
                           ))}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-background/30 p-2 rounded-md border border-white/5">
                           <Label className="text-xs text-muted-foreground">Ink</Label>
                           <input type="color" value={regionColor}
                             onChange={(e) => setRegionColor(e.target.value)}
-                            className="h-8 w-12 cursor-pointer rounded border" />
+                            className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-transparent" />
                         </div>
                       </>
                     )}
@@ -1178,13 +1151,13 @@ export function FabrixaApp() {
                       <div className="grid grid-cols-3 gap-1.5">
                         {GRADIENT_PRESETS.map((g) => (
                           <button key={g.id} onClick={() => setRegionGradientId(g.id)}
-                            className={`h-10 rounded-md border transition hover:ring-2 hover:ring-primary ${regionGradientId === g.id ? "ring-2 ring-primary" : ""}`}
+                            className={`h-10 rounded-md border border-white/20 transition hover:ring-2 hover:ring-primary shadow-sm ${regionGradientId === g.id ? "ring-2 ring-primary" : ""}`}
                             style={{ background: `linear-gradient(135deg, ${g.stops[0].color}, ${g.stops[1].color})` }}
                             aria-label={g.label} />
                         ))}
                       </div>
                     )}
-                    <Button size="sm" className="w-full"
+                    <Button size="sm" className="w-full shadow-md"
                       disabled={!activeState.selectionMaskDataUrl}
                       onClick={() => void applyToSelection()}>
                       <CheckCircle2 className="mr-1.5 h-4 w-4" />Apply to selection
@@ -1193,10 +1166,10 @@ export function FabrixaApp() {
                     {activeState.selectionMaskDataUrl && (
                       <div className="mt-2">
                         <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Preview</div>
-                        <div className="aspect-square w-full overflow-hidden rounded-md border bg-[conic-gradient(at_50%_50%,#e9e9ef_25%,#fafafa_0_50%,#e9e9ef_0_75%,#fafafa_0)] bg-[length:16px_16px]">
+                        <div className="aspect-square w-full overflow-hidden rounded-md border border-white/10 bg-[conic-gradient(at_50%_50%,#e9e9ef_25%,#fafafa_0_50%,#e9e9ef_0_75%,#fafafa_0)] bg-[length:16px_16px]">
                           {regionPreviewUrl
                             ? <img src={regionPreviewUrl} alt="region preview" className="h-full w-full object-cover" />
-                            : <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">Generating…</div>}
+                            : <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground bg-panel/30">Generating…</div>}
                         </div>
                       </div>
                     )}
@@ -1207,9 +1180,8 @@ export function FabrixaApp() {
           )}
         </div>
 
-        {/* Export quality dialog */}
         <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md bg-background/80 backdrop-blur-2xl border-white/10 shadow-2xl">
             <DialogHeader>
               <DialogTitle>Export as {exportFormat.toUpperCase()}</DialogTitle>
               <DialogDescription>Choose a quality preset.</DialogDescription>
@@ -1221,8 +1193,8 @@ export function FabrixaApp() {
                 { id: "hd", label: "HD", desc: "3× · max" },
               ] as const).map((q) => (
                 <button key={q.id} onClick={() => setExportQuality(q.id)}
-                  className={`rounded-lg border p-3 text-left transition ${
-                    exportQuality === q.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                  className={`rounded-xl border p-3 text-left transition ${
+                    exportQuality === q.id ? "border-primary bg-primary/5 shadow-md" : "border-white/10 hover:bg-muted/50 bg-background/40"
                   }`}>
                   <div className="text-sm font-medium">{q.label}</div>
                   <div className="text-[10px] text-muted-foreground">{q.desc}</div>
@@ -1231,7 +1203,7 @@ export function FabrixaApp() {
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setExportOpen(false)}>Cancel</Button>
-              <Button onClick={runExport}><Download className="mr-1.5 h-4 w-4" />Export</Button>
+              <Button onClick={runExport} className="shadow-md"><Download className="mr-1.5 h-4 w-4" />Export</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1269,9 +1241,8 @@ export function FabrixaApp() {
           ledgerBalance={coinBalance}
         />
 
-        {/* Onboarding */}
         <Dialog open={showOnboarding} onOpenChange={(o) => { if (!o) finishOnboarding(); else setShowOnboarding(true); }}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg bg-background/80 backdrop-blur-2xl border-white/10 shadow-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" />Welcome to Fabrixa</DialogTitle>
               <DialogDescription>Design beautiful textiles & garments in a few clicks.</DialogDescription>
@@ -1282,12 +1253,12 @@ export function FabrixaApp() {
               <Step n={3} title="Apply to a part">Pick a part chip (Body, Sleeves, Collar…) and hit <strong>Apply</strong>. In 3D, just <strong>click a part</strong> to select it.</Step>
               <Step n={4} title="Style the look">Toggle the mannequin, change scene (Studio / Runway), and pick a theme in Settings.</Step>
             </ol>
-            <DialogFooter><Button onClick={finishOnboarding}>Got it — let's design</Button></DialogFooter>
+            <DialogFooter><Button onClick={finishOnboarding} className="shadow-md">Got it — let's design</Button></DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Neck Designer dialog */}
+
         <Dialog open={neckOpen} onOpenChange={setNeckOpen}>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="sm:max-w-xl bg-background/80 backdrop-blur-2xl border-white/10 shadow-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2"><Scissors className="h-4 w-4" />Neck Designer</DialogTitle>
               <DialogDescription>Generate or pick a neckline for {garment.label}.</DialogDescription>
@@ -1318,7 +1289,7 @@ export function FabrixaApp() {
 
         <PricingDialog open={pricingOpen} onOpenChange={setPricingOpen} />
 
-        <footer className="shrink-0 border-t bg-panel/40 py-1.5 text-center text-[10px] text-muted-foreground">
+        <footer className="shrink-0 border-t border-white/10 bg-background/60 py-1.5 text-center text-[10px] text-muted-foreground backdrop-blur-2xl">
           Fabrixa · Axiom Dynamics
         </footer>
       </div>
@@ -1327,12 +1298,11 @@ export function FabrixaApp() {
   );
 }
 
-
 function IconBtn({ label, children, onClick }: { label: string; children: React.ReactNode; onClick: () => void }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={onClick}>{children}</Button></TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={onClick} className="hover:bg-white/5">{children}</Button></TooltipTrigger>
+      <TooltipContent className="bg-panel/80 backdrop-blur-md">{label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -1340,7 +1310,7 @@ function IconBtn({ label, children, onClick }: { label: string; children: React.
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{n}</span>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-sm">{n}</span>
       <div><div className="font-medium">{title}</div><div className="text-muted-foreground">{children}</div></div>
     </li>
   );
@@ -1353,7 +1323,7 @@ function SliderRow({ label, value, min, max, step, onChange }: { label: string; 
         <span className="text-muted-foreground">{label}</span>
         <span className="tabular-nums">{step < 1 ? value.toFixed(1) : value.toFixed(0)}</span>
       </div>
-      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} />
+      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} className="py-1" />
     </div>
   );
 }
